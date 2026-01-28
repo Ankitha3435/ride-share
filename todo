@@ -1,0 +1,15 @@
+~~admin editing user info not working~~
+~~add maintainance mode for admin~~
+~~restrict users, rides to 50 per page in admin page~~
+~~log user ops~~
+~~people registering bikes and scooters as drivers~~
+~~add car/bike option for drivers and hitchers~~
+~~if bike is chosen, default seats to 1 and price between 3 to 5 rs~~
+~~give option to change vehicle type in role details~~
+~~sessions schema isn't storing any data, is it even required~~
+~~change admin pagination system from simply "load more users" to "x of y pages", 50 users in each page, show the entire total user count next to "All Users"~~
+~~if 2 (maybe more) ride requests are made to bike/scooter type ride, both are being able to be accepted, this should not happen.~~
+~~so everytime a ride is accepted/cancelled, the system should update the availableSeats immediately and validate it when the next pending ride request is accepted/rejected (check this for car type too).~~
+
+research and switch logging to raspi
+incorporate web analytics in vercel

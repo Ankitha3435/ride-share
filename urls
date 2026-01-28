@@ -1,0 +1,11 @@
+frontend : https://rideshare-beta.vercel.app
+backend : https://rideshare-production-3217.up.railway.app
+
+# Railway Internal (Private)
+pesu-auth (internal) : http://pesu-auth.railway.internal:5000
+backend (internal) : http://rideshare.railway.internal
+
+# Development Ports
+backend dev port : 5001
+pesu-auth dev port : 5000
+frontend dev port : 5173

@@ -1,0 +1,402 @@
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { LoadingProvider } from "./contexts/LoadingContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+import LoadingSpinner from "./components/LoadingSpinner";
+import React, { ReactNode, useState, useEffect } from "react";
+import api from "./utils/api";
+import Maintenance from "./pages/Maintenance";
+
+// AdminRoute component to protect admin routes
+interface AdminRouteProps {
+  children: ReactNode;
+}
+
+const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
+  const { loading, isAuthenticated, currentUser } = useAuth();
+
+  if (loading) {
+    return <LoadingSpinner fullScreen />;
+  }
+
+  // Check if user is authenticated and is an admin
+  if (!isAuthenticated) {
+    return <Navigate to="/admin/login" replace />;
+  }
+
+  if (!currentUser?.isAdmin) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// Root route handler to determine where to redirect based on auth state
+const RootRouteHandler = () => {
+  const { currentUser, loading } = useAuth();
+  
+  if (loading) {
+    return <LoadingSpinner fullScreen />;
+  }
+  
+  // If not logged in, redirect to login page
+  if (!currentUser) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  // Admin users should be redirected to admin dashboard
+  if (currentUser.isAdmin) {
+    return <Navigate to="/admin" replace />;
+  }
+  
+  if (currentUser.activeRoles?.driver && currentUser.driverProfileComplete) {
+    return <Navigate to="/driver/dashboard" replace />;
+  }
+  
+  if (currentUser.activeRoles?.hitcher && currentUser.hitcherProfileComplete) {
+    return <Navigate to="/hitcher/dashboard" replace />;
+  }
+  
+  if (!currentUser.activeRoles?.driver && !currentUser.activeRoles?.hitcher) {
+    return <Navigate to="/role-selection" replace />;
+  }
+  
+  if (currentUser.activeRoles?.driver && !currentUser.driverProfileComplete) {
+    return <Navigate to="/driver/setup" replace />;
+  }
+  
+  if (currentUser.activeRoles?.hitcher && !currentUser.hitcherProfileComplete) {
+    return <Navigate to="/hitcher/setup" replace />;
+  }
+  
+  // Default fallback
+  return <Navigate to="/role-selection" replace />;
+};
+
+// Pages
+import Login from "./pages/Login";
+import AdminLogin from "./pages/AdminLogin";
+import TestLogin from "./pages/TestLogin";
+import RoleSelection from "./pages/RoleSelection";
+import DriverDashboard from "./pages/DriverDashboard";
+import HitcherDashboard from "./pages/HitcherDashboard";
+import DriverProfileSetup from "./pages/DriverProfileSetup";
+import HitcherProfileSetup from "./pages/HitcherProfileSetup";
+import RideSearch from "./pages/RideSearch";
+import RideManagement from "./pages/RideManagement";
+import RideCreation from "./pages/RideCreation";
+import UserProfile from "./pages/UserProfile";
+import ProfileSettings from "./pages/ProfileSettings";
+import RoleDetails from "./pages/RoleDetails";
+import NotFound from "./pages/NotFound";
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminUserDetails from "./pages/AdminUserDetails";
+import AdminRideDetails from './pages/AdminRideDetails';
+import Report from "./pages/Report";
+import TermsAndConditions from "./pages/TermsAndConditions";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import RideEdit from "./pages/RideEdit";
+import FAQ from "./pages/FAQ";
+import Tutorial from "./pages/Tutorial";
+
+// Route change handler component
+const RouteChangeHandler = ({ children }: { children: ReactNode }) => {
+  const { loading } = useAuth();
+
+  return (
+    <>
+      {loading && <LoadingSpinner fullScreen />}
+      {!loading && children}
+    </>
+  );
+};
+
+// Maintenance checker component
+const MaintenanceChecker = ({ children }: { children: ReactNode }) => {
+  const [isMaintenanceMode, setIsMaintenanceMode] = useState<boolean>(false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState<string>("");
+  const [isChecking, setIsChecking] = useState<boolean>(true);
+  const { currentUser } = useAuth();
+
+  useEffect(() => {
+    const checkMaintenanceStatus = async () => {
+      try {
+        const response = await api.get('/api/maintenance-status');
+        if (response.data.success && response.data.isActive) {
+          // Only show maintenance page for non-admin and non-test users
+          // and not on admin/test login pages
+          const isAdminLoginPage = window.location.pathname === '/admin/login';
+          const isTestLoginPage = window.location.pathname === '/test/login';
+          
+          // Check if user is a test user by looking at the token
+          let isTestUser = false;
+          const token = localStorage.getItem('authToken');
+          if (token) {
+            try {
+              const payload = JSON.parse(atob(token.split('.')[1]));
+              isTestUser = payload.isTestUser === true;
+            } catch (e) {
+              // Ignore decode errors
+            }
+          }
+          
+          if (!currentUser?.isAdmin && !isTestUser && !isAdminLoginPage && !isTestLoginPage) {
+            setIsMaintenanceMode(true);
+            setMaintenanceMessage(response.data.message);
+          } else {
+            setIsMaintenanceMode(false);
+          }
+        } else {
+          setIsMaintenanceMode(false);
+        }
+      } catch (error) {
+        console.error('Error checking maintenance status:', error);
+      } finally {
+        setIsChecking(false);
+      }
+    };
+
+    checkMaintenanceStatus();
+    
+    // Check every 30 seconds
+    const interval = setInterval(checkMaintenanceStatus, 30000);
+    
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
+  if (isChecking) {
+    return <LoadingSpinner fullScreen />;
+  }
+
+  if (isMaintenanceMode) {
+    return <Maintenance message={maintenanceMessage} />;
+  }
+
+  return <>{children}</>;
+};
+
+function App() {
+  return (
+    <Router
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
+      <LoadingProvider>
+        <AuthProvider>
+          <MaintenanceChecker>
+            <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+              <Routes>
+              {/* Root route with smart redirection */}
+              <Route path="/" element={<RootRouteHandler />} />
+              
+              {/* Login Route - Public Access */}
+              <Route path="/login" element={<Login />} />
+              
+              {/* Admin Login - Public Access */}
+              <Route path="/admin/login" element={<AdminLogin />} />
+              
+              {/* Test Login - Public Access (Restricted) */}
+              <Route path="/test/login" element={<TestLogin />} />
+
+              {/* Legal Pages - Public Access */}
+              <Route path="/terms" element={<TermsAndConditions />} />
+              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+              
+              {/* Tutorial Page - Public Access */}
+              <Route path="/tutorial" element={<Tutorial />} />
+              
+              {/* Protected routes */}
+              <Route
+                path="/role-selection"
+                element={
+                  <ProtectedRoute>
+                    <RouteChangeHandler>
+                      <RoleSelection />
+                    </RouteChangeHandler>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/driver/setup"
+                element={
+                  <ProtectedRoute>
+                    <RouteChangeHandler>
+                      <DriverProfileSetup />
+                    </RouteChangeHandler>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/hitcher/setup"
+                element={
+                  <ProtectedRoute>
+                    <RouteChangeHandler>
+                      <HitcherProfileSetup />
+                    </RouteChangeHandler>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/driver/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <RouteChangeHandler>
+                      <DriverDashboard />
+                    </RouteChangeHandler>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/hitcher/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <RouteChangeHandler>
+                      <HitcherDashboard />
+                    </RouteChangeHandler>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/rides/search"
+                element={
+                  <ProtectedRoute>
+                    <RouteChangeHandler>
+                      <RideSearch />
+                    </RouteChangeHandler>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/rides/manage"
+                element={
+                  <ProtectedRoute>
+                    <RouteChangeHandler>
+                      <RideManagement />
+                    </RouteChangeHandler>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/rides/create"
+                element={
+                  <ProtectedRoute>
+                    <RouteChangeHandler>
+                      <RideCreation />
+                    </RouteChangeHandler>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/rides/edit/:id"
+                element={
+                  <ProtectedRoute>
+                    <RouteChangeHandler>
+                      <RideEdit />
+                    </RouteChangeHandler>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <RouteChangeHandler>
+                      <UserProfile />
+                    </RouteChangeHandler>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile/settings"
+                element={
+                  <ProtectedRoute>
+                    <RouteChangeHandler>
+                      <ProfileSettings />
+                    </RouteChangeHandler>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile/role-details"
+                element={
+                  <ProtectedRoute>
+                    <RouteChangeHandler>
+                      <RoleDetails />
+                    </RouteChangeHandler>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/faq"
+                element={
+                  <ProtectedRoute>
+                    <RouteChangeHandler>
+                      <FAQ />
+                    </RouteChangeHandler>
+                  </ProtectedRoute>
+                }
+              />
+              {/* Admin route */}
+              <Route 
+                path="/admin" 
+                element={
+                  <AdminRoute>
+                    <RouteChangeHandler>
+                      <AdminDashboard />
+                    </RouteChangeHandler>
+                  </AdminRoute>
+                } 
+              />
+              <Route 
+                path="/admin/users/:id" 
+                element={
+                  <AdminRoute>
+                    <RouteChangeHandler>
+                      <AdminUserDetails />
+                    </RouteChangeHandler>
+                  </AdminRoute>
+                } 
+              />
+              <Route 
+                path="/admin/rides/:id" 
+                element={
+                  <AdminRoute>
+                    <RouteChangeHandler>
+                      <AdminRideDetails />
+                    </RouteChangeHandler>
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="/report"
+                element={
+                  <ProtectedRoute>
+                    <RouteChangeHandler>
+                      <Report />
+                    </RouteChangeHandler>
+                  </ProtectedRoute>
+                }
+              />
+              {/* Not found route */}
+              <Route path="*" element={
+                <RouteChangeHandler>
+                  <NotFound />
+                </RouteChangeHandler>
+              } />
+            </Routes>
+          </div>
+          </MaintenanceChecker>
+        </AuthProvider>
+      </LoadingProvider>
+    </Router>
+  );
+}
+
+export default App;
